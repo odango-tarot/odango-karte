@@ -8,10 +8,8 @@ st.set_page_config(page_title="カルテ変換ツール 🃏", page_icon="🃏",
 def check_password():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
-
     if st.session_state.authenticated:
         return True
-
     st.title("🃏 カルテ変換ツール")
     pw = st.text_input("パスワード", type="password")
     if st.button("ログイン", type="primary"):
@@ -28,8 +26,8 @@ if not check_password():
 st.title("🃏 カルテ変換ツール")
 st.caption("NottaAIの要約をペーストして、カンペ形式に変換します")
 
-# ─── システムプロンプト ────────────────────────────────────
-SYSTEM_PROMPT = """あなたは電話占い師のアシスタントです。
+# ─── システムプロンプト：カルテ ───────────────────────────
+KARTE_PROMPT = """あなたは電話占い師のアシスタントです。
 鑑定音声の文字起こし要約を受け取り、次回リピート時にひと目で読み返せる「カルテメモ（カンペ）」として整理してください。
 
 【出力ルール】
@@ -62,6 +60,31 @@ SYSTEM_PROMPT = """あなたは電話占い師のアシスタントです。
 構成はあくまで目安。内容に応じて項目を増減・統合してよい。
 読んだ瞬間に鑑定の流れが思い出せるカンペを目指すこと。"""
 
+# ─── システムプロンプト：フォローメール ─────────────────
+MAIL_PROMPT = """あなたは電話占い師「おだんごめがね」のアシスタントです。
+鑑定音声の文字起こし要約を受け取り、鑑定後にお客様へ送るフォローメールを仕上げてください。
+
+【最優先ルール】
+- 要約の末尾に「お客様へのフォローメールドラフト」がある場合は、それをベースとして使う
+- ドラフトの文章・構成・トーンをできるだけ活かし、必要な修正のみ加える
+- ドラフトがない場合は下記の構成で一から作成する
+
+【修正・調整の方針】
+- タイムスタンプは除去する
+- 文体はですます調・温かみと親しみやすさのある雰囲気を維持
+- 不自然な言い回しや冗長な部分があれば整える程度にとどめる
+- 内容の追加・削除は最小限に
+
+【ドラフトがない場合の構成】
+1. 書き出し：鑑定のお礼と労い
+2. 本文：鑑定の核心を1〜2段落でやさしくまとめる（箇条書きは使わない）
+3. 締め：励ましの言葉＋また相談できることを伝える
+
+【共通ルール】
+- マークダウン記法は使わない
+- 署名は「おだんごめがね」で統一
+- 全体で300〜500文字程度"""
+
 # ─── 入力エリア ───────────────────────────────────────────
 input_text = st.text_area(
     "NottaAI 要約テキスト",
@@ -78,29 +101,53 @@ if convert:
     if not input_text.strip():
         st.warning("テキストをペーストしてください")
     else:
-        with st.spinner("変換中…"):
+        client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
+
+        # カルテ生成
+        with st.spinner("カルテを生成中…"):
             try:
-                client = anthropic.Anthropic(api_key=st.secrets["ANTHROPIC_API_KEY"])
-                message = client.messages.create(
+                karte_msg = client.messages.create(
                     model="claude-opus-4-5",
                     max_tokens=2048,
-                    system=SYSTEM_PROMPT,
+                    system=KARTE_PROMPT,
                     messages=[{"role": "user", "content": input_text}],
                 )
-                result = message.content[0].text.strip()
-
-                # 文字数カウント
-                char_count = len(result)
-                color = "red" if char_count > 900 else "gray"
-                st.divider()
-                st.subheader("カルテメモ")
-                st.markdown(
-                    f"<p style='color:{color}; font-size:13px; text-align:right;'>{char_count} 文字</p>",
-                    unsafe_allow_html=True,
-                )
-
-                # コピー用テキストエリア
-                st.text_area("", value=result, height=500, key="copy_area")
-
+                karte_result = karte_msg.content[0].text.strip()
             except Exception as e:
-                st.error(f"エラーが発生しました: {e}")
+                st.error(f"カルテ生成エラー: {e}")
+                st.stop()
+
+        # フォローメール生成
+        with st.spinner("フォローメールを生成中…"):
+            try:
+                mail_msg = client.messages.create(
+                    model="claude-opus-4-5",
+                    max_tokens=1024,
+                    system=MAIL_PROMPT,
+                    messages=[{"role": "user", "content": input_text}],
+                )
+                mail_result = mail_msg.content[0].text.strip()
+            except Exception as e:
+                st.error(f"メール生成エラー: {e}")
+                st.stop()
+
+        # ─── カルテ表示 ───────────────────────────────────
+        st.divider()
+        st.subheader("📋 カルテメモ")
+        char_count = len(karte_result)
+        color = "red" if char_count > 900 else "gray"
+        st.markdown(
+            f"<p style='color:{color}; font-size:13px; text-align:right;'>{char_count} 文字</p>",
+            unsafe_allow_html=True,
+        )
+        st.text_area("", value=karte_result, height=400, key="karte_area")
+
+        # ─── フォローメール表示 ───────────────────────────
+        st.divider()
+        st.subheader("✉️ フォローメール")
+        mail_count = len(mail_result)
+        st.markdown(
+            f"<p style='color:gray; font-size:13px; text-align:right;'>{mail_count} 文字</p>",
+            unsafe_allow_html=True,
+        )
+        st.text_area("", value=mail_result, height=300, key="mail_area")
