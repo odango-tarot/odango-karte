@@ -199,7 +199,7 @@ if convert:
             try:
                 mail_msg = client.messages.create(
                     model="claude-opus-4-5",
-                    max_tokens=1024,
+                    max_tokens=4096,
                     system=mail_prompt,
                     messages=[{"role": "user", "content": input_text}],
                 )
