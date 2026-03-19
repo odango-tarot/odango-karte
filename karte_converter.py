@@ -130,6 +130,7 @@ Shantiです。」
 - ドラフトの内容は活かすが、文体は必ずShantiのトーンに統一する
 - タイムスタンプは除去する
 - マークダウン記法（#・**・---など）は使わない
+- 出力全体は1500文字以内に収める
 - お客様の名前は要約から拾う"""
 
 # ─── 冒頭文の定義 ────────────────────────────────────────
@@ -199,7 +200,7 @@ if convert:
             try:
                 mail_msg = client.messages.create(
                     model="claude-opus-4-5",
-                    max_tokens=4096,
+                    max_tokens=2048,
                     system=mail_prompt,
                     messages=[{"role": "user", "content": input_text}],
                 )
