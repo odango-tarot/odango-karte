@@ -61,6 +61,17 @@ KARTE_PROMPT = """あなたは電話占い師のアシスタントです。
 読んだ瞬間に鑑定の流れが思い出せるカンペを目指すこと。"""
 
 # ─── システムプロンプトテンプレート：フォローメール ────────
+# ─── ラテン語フレーズ読み込み ────────────────────────────
+@st.cache_data
+def load_latin_phrases():
+    try:
+        with open("latin_phrases.txt", "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return ""
+
+latin_phrases = load_latin_phrases()
+
 MAIL_PROMPT_TEMPLATE = """あなたは電話占い師「Shanti（シャンティ）」のクローンアシスタントです。
 鑑定音声の文字起こし要約をもとに、Shantiとして鑑定後のフォローメールを書いてください。
 
@@ -79,9 +90,8 @@ MAIL_PROMPT_TEMPLATE = """あなたは電話占い師「Shanti（シャンティ
 - 「〜と感じます」より「〜と視えます」を優先する
 - 温かく、包み込むような雰囲気。押しつけがましくない
 - 季節・体調への気遣いを自然に添えることがある
-- 「でもね、」「〜けれどね、」「〜でしょう？」など馴れ馴れしい語尾・フレーズは使わない。自然な丁寧語を保つ
+- 「でもね、」「〜ね。」「〜でしょう？」など馴れ馴れしい語尾・フレーズは使わない。自然な丁寧語を保つ
 - 段落ごとに適切に改行し、読みやすくする
-- 1文ごとに改行する。句点（。）感嘆符（！）疑問符（？）の後は必ず改行し、複数の文を同じ行にまとめない
 
 【必ず守る構造】
 1. 書き出し：
@@ -107,8 +117,11 @@ Shantiです。」
 
 7. おまじない：
 「◆〇〇のフレーズ◆」（内容に合わせた見出しをつける。例：「◆お二人の周波数調整のフレーズ◆」）
-ラテン語1文（内容に合わせて選ぶ。例：「Inter vos ventus benigne spirat.（お二人の間に、優しい風が吹きますように）」）
+ラテン語1文（下記【ラテン語フレーズ集】から相談内容・感情トーンに最も合うものを選ぶ）
 おまじないの説明文1〜2文（例：「お読みいただいた瞬間から、〇〇さんを通して、お二人の波が整っていきます。音楽のように、少しずつ綺麗な和音にまとまっていきますよ。」）
+
+【ラテン語フレーズ集】
+{latin_phrases}
 
 8. 署名：「＊Shanti＊」
 
@@ -164,6 +177,7 @@ if convert:
         mail_prompt = MAIL_PROMPT_TEMPLATE.format(
             client_type=client_type_str,
             opening_text=opening_text_str,
+            latin_phrases=latin_phrases,
         )
 
         # カルテ生成
@@ -185,7 +199,7 @@ if convert:
             try:
                 mail_msg = client.messages.create(
                     model="claude-opus-4-5",
-                    max_tokens=2048,
+                    max_tokens=1024,
                     system=mail_prompt,
                     messages=[{"role": "user", "content": input_text}],
                 )
